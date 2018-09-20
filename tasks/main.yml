@@ -1,0 +1,45 @@
+---
+- name: Check if Pi-hole is already installed
+  stat:
+    path: "/etc/pihole/setupVars.conf"
+  register: pihole_config
+
+- name: Make sure the config folder exists
+  become: yes
+  file:
+    path: "/etc/pihole"
+    owner: root
+    group: root
+    state: directory
+    mode: 0755
+  when: not pihole_config.stat.exists
+
+- name: Generate the pihole configuration
+  become: yes
+  template:
+    src: "{{ role_path }}/templates/setupVars.conf.j2"
+    dest: "/etc/pihole/setupVars.conf"
+    owner: root
+    group: root
+    mode: 0644
+  when: not pihole_config.stat.exists
+
+- name: Download the installation script
+  get_url:
+    url: "https://install.pi-hole.net"
+    dest: "~/pihole.sh"
+    mode: 0740
+  when: not pihole_config.stat.exists
+
+- name: Edit script so that it'll run unattended
+  replace:
+    path: "~/pihole.sh"
+    regexp: '^runUnattended=false$'
+    replace: 'runUnattended=true'
+
+- name: Run the unattended install
+  command: "~/pihole.sh"
+  args:
+    creates: /usr/local/bin/pihole
+  changed_when: output is defined and output.stdout != ""
+  when: not pihole_config.stat.exists
